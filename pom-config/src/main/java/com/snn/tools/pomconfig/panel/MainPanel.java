@@ -7,6 +7,7 @@ import org.apache.commons.lang3.StringUtils;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.io.File;
 import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -79,6 +80,13 @@ public class MainPanel {
             String file2 = fileText2.getText();
             if (StringUtils.isAnyBlank(file1, file2)) {
                 JOptionPane.showMessageDialog(frame, "存在路径未填写",
+
+                    "警告", JOptionPane.ERROR_MESSAGE
+                );
+                return;
+            }
+            if(!new File(file1).exists()||!new File(file2).exists()){
+                JOptionPane.showMessageDialog(frame, "请检查路径文件是否存在",
 
                     "警告", JOptionPane.ERROR_MESSAGE
                 );
