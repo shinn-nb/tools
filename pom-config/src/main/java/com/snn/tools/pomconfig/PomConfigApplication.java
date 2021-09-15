@@ -11,7 +11,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class PomConfigApplication {
 
     public static void main(String[] args) {
-        MainPanel.initModel();
+        MainPanel mainPanel=new MainPanel();
+        mainPanel.showModel();
         SpringApplication.run(PomConfigApplication.class, args);
     }
 

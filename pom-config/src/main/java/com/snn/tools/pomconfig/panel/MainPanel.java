@@ -1,43 +1,27 @@
 package com.snn.tools.pomconfig.panel;
 
-import com.snn.tools.pomconfig.entity.JarConfig;
-import com.snn.tools.pomconfig.utils.TxtUtil;
+import com.snn.tools.pomconfig.exception.MavenException;
+import com.snn.tools.pomconfig.utils.PomDataUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.maven.shared.invoker.*;
 
 import javax.swing.*;
-import javax.swing.filechooser.FileSystemView;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.io.File;
-import java.util.*;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * @Author: shinn
  * @Date: 2021/9/13 下午4:38 （日期和时间）
  */
 public class MainPanel {
-    private MainPanel() {}
+    private final JFrame frame;
 
-    private static final String BUILD_TREE = "dependency:tree";
-    private static final Object[]
-        COLUMN_NAMES =
-        new Object[]{"序号",
-            "groupId",
-            "artifactId",
-            "idaas-core/module",
-            "idaas-core/version",
-            "idaas-lcm/module",
-            "idaas-lcm/version"};
-    //设置列名
-
-    public static void initModel() {
-        JFrame frame = new JFrame("版本比较");
+    public MainPanel() {
+        frame = new JFrame("版本比较");
         frame.setSize(450, 300);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-
         JPanel panel = new JPanel();
         frame.add(panel);
         panel.setLayout(null);
@@ -84,6 +68,9 @@ public class MainPanel {
         panel.add(loginButton);
         panel.add(jCheckBox);
         loginButton.addActionListener(e -> {
+            if (!loginButton.isEnabled()) {
+                return;
+            }
             try {
                 loginButton.setText("正在比较...");
                 loginButton.setEnabled(false);
@@ -108,14 +95,15 @@ public class MainPanel {
                     );
                     return;
                 }
-                List<Object[]> data = compareData(file1, file2, mvn.getText(), jCheckBox.isSelected());
+                List<Object[]> data = PomDataUtil.compareData(file1, file2, mvn.getText(), jCheckBox.isSelected());
                 Object[][] tableData = new Object[data.size()][];
                 for (int i = 0, len = data.size(); i < len; i++) {
                     tableData[i] = data.get(i);
                 }
                 DefaultTableModel tableModel2 = new DefaultTableModel(tableData, COLUMN_NAMES);
                 TableFrame.showTable(tableModel2);
-            } catch (Exception e2) {
+            } catch (MavenException | MavenInvocationException e2) {
+                e2.printStackTrace();
                 JOptionPane.showMessageDialog(frame, "生成失败,请查看输出的报错信息",
                     "错误", JOptionPane.ERROR_MESSAGE
                 );
@@ -125,90 +113,22 @@ public class MainPanel {
             }
 
         });
+    }
+
+    private static final Object[]
+        COLUMN_NAMES =
+        new Object[]{"序号",
+            "groupId",
+            "artifactId",
+            "版本来源/module",
+            "版本来源/version",
+            "版本比较/module",
+            "版本比较/version"};
+    //设置列名
+
+    public void showModel() {
+
         frame.setVisible(true);
     }
 
-    /**
-     * @param mavenPath  maven系统路径 如D:\apache-maven-3.5.4
-     * @param pomPath    要操控的pom文件的系统路径 如：D:\coding\**\pom.xml
-     * @param mavenOrder maven命令如：clean
-     */
-    public static JarConfig operationMavenOrder(String mavenPath, String pomPath, String mavenOrder) {
-
-        InvocationRequest request = new DefaultInvocationRequest();
-        //想要操控的pom文件的位置
-        request.setPomFile(new File(pomPath));
-        //操控的maven命令
-        request.setGoals(Collections.singletonList(mavenOrder));
-
-        Invoker invoker = new DefaultInvoker();
-        //maven的位置
-        if (!StringUtils.isBlank(mavenPath)) {
-            invoker.setMavenHome(new File(mavenPath));
-        }
-
-        TxtUtil util = new TxtUtil();
-        invoker.setOutputHandler(line -> util.readTxt(line));
-        try {
-            int a = invoker.execute(request).getExitCode();
-            if (a != 0) {
-                throw new RuntimeException("maven命令执行失败");
-            }
-            return util.getJarConfig();
-        } catch (
-            MavenInvocationException e) {
-            throw new RuntimeException(e.getMessage());
-        }
-    }
-
-    private static List<Object[]> compareData(String pomFile1, String pomFile2, String mavenPath, boolean hasThird) {
-
-        JarConfig jarConfig = operationMavenOrder(
-            mavenPath,
-            pomFile1,
-            BUILD_TREE
-        );
-        JarConfig jarConfig11 = operationMavenOrder(
-            mavenPath,
-            pomFile2,
-            BUILD_TREE
-        );
-
-        Map<String, JarConfig> map1 = new HashMap<>();
-        Map<String, JarConfig> map2 = new HashMap<>();
-        dealMap(jarConfig, map1);
-        dealMap(jarConfig11, map2);
-
-        Set<String> allKeys = new HashSet<>(map1.keySet());
-        allKeys.addAll(map2.keySet());
-
-        allKeys = hasThird ? allKeys.stream().sorted().collect(Collectors.toCollection(
-            LinkedHashSet::new)) : allKeys.stream().filter(key -> StringUtils.compare(key, "2") <= 0).sorted().collect(
-            Collectors.toCollection(LinkedHashSet::new));
-        List<Object[]> retList = new ArrayList<>();
-        int s = 0;
-        for (String key : allKeys) {
-            JarConfig jar1 = map1.getOrDefault(key, JarConfig.builder().build());
-            JarConfig jar2 = map2.getOrDefault(key, JarConfig.builder().build());
-            if (!StringUtils.equals(jar1.getVersion(), jar2.getVersion()) && !StringUtils.isAnyBlank(
-                jar1.getVersion(),
-                jar2.getVersion()
-            )) {
-                s++;
-                retList.add(new Object[]{s,
-                    jar1.getGroupId(),
-                    jar1.getArtifactId(),
-                    jar1.getModule(),
-                    jar1.getVersion(),
-                    jar2.getModule(),
-                    jar2.getVersion()});
-            }
-        }
-        return retList;
-    }
-
-    private static void dealMap(JarConfig jarConfig, Map<String, JarConfig> map) {
-        map.put(jarConfig.getId(), jarConfig);
-        jarConfig.getNext().forEach(item -> dealMap(item, map));
-    }
 }
